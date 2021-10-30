@@ -1,0 +1,154 @@
+version: "3.5"
+services:
+  orion:
+    image: fiware/orion-ld:v0.8.1
+    hostname: orion
+    container_name: fiware-orion
+    restart: always
+    environment:
+      - ORIONLD_TROE=${ORIONLD_TROE}
+      - ORIONLD_TROE_USER=${ORIONLD_TROE_USER}
+      - ORIONLD_TROE_PWD=${ORIONLD_TROE_PWD}
+      - ORIONLD_TROE_HOST=${ORIONLD_TROE_HOST}
+      - ORIONLD_MONGO_HOST=${ORIONLD_MONGO_HOST}
+    depends_on:
+      - mongo-db
+      - timescale
+    networks:
+      - default
+    ports:
+      - ${ORIONLD_PORT}:1026
+    command: -logLevel DEBUG
+    healthcheck:
+      test: curl --fail -s http://orion:1026/version || exit 1
+      interval: 5s
+
+  mongo-db:
+    image: mongo:4.2
+    hostname: mongo-db
+    container_name: db-mongo
+    expose:
+      - ${MONGO_PORT}
+    ports:
+      - ${MONGO_PORT}:27017
+    networks:
+      - default
+    command: --nojournal
+    volumes:
+      - mongo-db:/data
+    healthcheck:
+      test: |
+        host=`hostname --ip-address || echo '127.0.0.1'`;
+        mongo --quiet $host/test --eval 'quit(db.runCommand({ ping: 1 }).ok ? 0 : 2)' && echo 0 || echo 1
+      interval: 5s
+
+  timescale:
+    image: timescale/timescaledb-postgis:1.7.5-pg12
+    hostname: timescale
+    container_name: timescale
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orion"]
+      interval: 15s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST_AUTH_METHOD=${POSTGRES_HOST_AUTH_METHOD}
+    expose:
+      - ${POSTGRES_PORT}
+    ports:
+      - ${POSTGRES_PORT}:5432
+    networks:
+      - default
+
+  mintaka:
+    image: fiware/mintaka:latest
+    hostname: mintaka
+    container_name: mintaka
+    environment:
+      - DATASOURCES_DEFAULT_HOST=${DATASOURCES_DEFAULT_HOST}
+      - DATASOURCES_DEFAULT_USERNAME=${DATASOURCES_DEFAULT_USERNAME}
+      - DATASOURCES_DEFAULT_PASSWORD=${DATASOURCES_DEFAULT_PASSWORD}
+      - DATASOURCES_DEFAULT_DATABSE=${DATASOURCES_DEFAULT_DATABASE}
+    expose:
+      - ${MINTAKA_PORT}
+    ports:
+      - ${MINTAKA_PORT}:8080
+    networks:
+      - default
+
+  iot-agent:
+    image: fiware/iotagent-json:latest
+    hostname: iot-agent
+    container_name: fiware-iot-agent
+    depends_on:
+      - mongo-db
+    networks:
+      - default
+    expose:
+      - ${IOTA_NORTH_PORT}
+      - ${IOTA_NORTH_PORT}
+    ports:
+      - ${IOTA_NORTH_PORT}:4041
+      - ${IOTA_HTTP_PORT}:7896
+    environment:
+      - IOTA_CB_HOST=${IOTA_CB_HOST} # name of the context broker to update context
+      - IOTA_CB_PORT=${IOTA_CB_PORT} # port the context broker listens on to update context
+      - IOTA_NORTH_PORT=${IOTA_NORTH_PORT}
+      - IOTA_REGISTRY_TYPE=${IOTA_REGISTRY_TYPE} #Whether to hold IoT device info in memory or in a database
+      - IOTA_LOG_LEVEL=${IOTA_LOG_LEVEL_DEBUG} # The log level of the IoT Agent
+      - IOTA_TIMESTAMP=${IOTA_TIMESTAMP} # Supply timestamp information with each measurement
+      - IOTA_AUTOCAST=${IOTA_AUTOCAST} # Ensure Ultralight number values are read as numbers not strings
+      - IOTA_MONGO_HOST=${IOTA_MONGO_HOST} # The host name of MongoDB
+      - IOTA_MONGO_PORT=${IOTA_MONGO_PORT} # The port mongoDB is listening on
+      - IOTA_MONGO_DB=${IOTA_MONGO_DB} # The name of the database used in mongoDB
+      - IOTA_HTTP_PORT=${IOTA_HTTP_PORT} # The port used for device traffic over HTTP
+      - IOTA_PROVIDER_URL=${IOTA_PROVIDER_URL}
+      - IOTA_DEFAULT_RESOURCE=${IOTA_DEFAULT_RESOURCE}
+
+      - IOTA_CB_NGSI_VERSION=${IOTA_CB_NGSI_VERSION} # use NGSI-LD when sending updates for active attributes
+      - IOTA_JSON_LD_CONTEXT=${IOTA_JSON_LD_CONTEXT}
+      - IOTA_FALLBACK_TENANT=${IOTA_FALLBACK_TENANT}
+    healthcheck:
+      interval: 10s
+  
+  node-red:
+    build: ./build-node-red
+    image: fiware/node-red
+    volumes:
+      - ./node-red:/data
+    hostname: node-red
+    container_name: node-red
+    depends_on:
+      - orion
+    expose:
+      - ${NODE_RED_PORT}
+    ports:
+      - ${NODE_RED_PORT}:1880
+    networks:
+      - default
+    environment:
+      - NODE_RED_ENABLE_PROJECTS=${NODE_RED_ENABLE_PROJECTS}
+
+  node-red1:
+    build: ./build-node-red
+    image: fiware/node-red
+    volumes:
+      - ./node-red1:/data
+    hostname: node-red1
+    container_name: node-red1
+    depends_on:
+      - orion
+    expose:
+      - ${NODE_RED1_PORT}
+    ports:
+      - ${NODE_RED1_PORT}:1880
+    networks:
+      - default
+    environment:
+      - NODE_RED_ENABLE_PROJECTS=${NODE_RED_ENABLE_PROJECTS}
+
+volumes:
+  mongo-db: ~
