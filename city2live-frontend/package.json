@@ -4,7 +4,7 @@
   "licence": "MIT",
   "version": "1.2.0",
   "private": false,
-  "proxy": "https://4043-84-254-8-158.ngrok.io ",
+  "proxy": "https://b3fe-84-254-8-158.ngrok.io",
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
